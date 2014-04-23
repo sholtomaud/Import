@@ -106,14 +106,14 @@ use constant HY_DB => 'hydb.db';
     my $config = $import->config();
     #print $fh "config [".Dumper($config)."]\n";  
     
-    print $fh "Preparing for foreign_table [$foreign_table]\n";
+    #print $fh "Preparing for foreign_table [$foreign_table]\n";
     my $query = qq{select * from $foreign_table limit 10};
     my $sth = $dbh->prepare($query);
     $sth->execute();
     
     print $fh "Executed query\n";
     
-    my $rns_aquifer = $sth->fetchall_arrayref({});
+    my $rows_ref = $sth->fetchall_arrayref({});
     #print $fh "foreign_table [$foreign_table] [".Dumper($rns_aquifer)."]\n";  
     my %row;
     
@@ -128,6 +128,8 @@ use constant HY_DB => 'hydb.db';
     
     #print $fh "hydstra tables for foreign_table [$foreign_table] [".Dumper($hydstra_tables)."]\n";  
     
+    next if ( $db_config_name =~ m{^(Var|Elev|Spec|Water|Mult).*}i );
+    
     foreach my $hydstra_table (@$hydstra_tables){
       my $module = ucfirst($hydstra_table);
       my $hypm = "Hydstra::$module";
@@ -137,29 +139,103 @@ use constant HY_DB => 'hydb.db';
       
       #This comes from an export from the table module
       my $ordered_hydstra_fields = $table->ordered_fields;
-      print $fh "Ordered fields [\n".Dumper($ordered_hydstra_fields)."]\n";
+      print $fh "Hydstra Table [$hydstra_table]\n";
+      #print $fh "Ordered fields [\n".Dumper($ordered_hydstra_fields)."]\n";
       $hydbh->do($create);
-      #my $hysth = $hydbh->prepare($prepare);
+      my $hysth = $hydbh->prepare($prepare);
       
-=skip    
-      my @ordered_hyfields = $config->ordered_hytable_fields($hydstra_table);
+      #my @ordered_hyfields = $config->ordered_hytable_fields($hydstra_table);
+      #$config->value('field'=>$_)
+      
+      
+      #foreach (@{$ordered_hydstra_fields}){ 
+      #  my $mapped_field = $import->mapping($config,$_)//'ignored';
+      #  print $fh "hyfield [$_] mapped_field [$mapped_field]\n";
+      #}
       
       foreach $row_ref ( @$rows_ref ) {
         
-        my @write_row = ( map { 
-          if ( defined ( $config->value('field'=>$_) ) ){
-            $config->value('field'=>$_);
+        print $fh " row_ref [".Dumper($row_ref)."]\n";
+        my %mapped_data = ();
+        foreach $foreign_key ( keys %{$row_ref}){
+            if ( $row_ref->{$foreign_key} gt ''){
+              my $mapped_fields = $import->table_field_mapping($config,lc($foreign_key),lc($hydstra_table) )//next; #"[$foreign_key] undef";
+              foreach $mapped_field ( keys %{$mapped_fields} ){
+                if ( defined ( $import->value($config,$mapped_field) ) ){
+                  $mapped_data{lc($mapped_field)} = $import->value($config,$mapped_field);
+                }
+                #elsif(){}
+                else{
+                  $mapped_data{lc($mapped_field)} = $row_ref->{$foreign_key}//'what the?';
+                }
+              }  
+            }
+            else{
+              next;
+            }
+        }
+        
+        #%{$mapped_data{$hydstra_table}} = map { $import->table_field_mapping($config,$_,$hydstra_table)  } keys %{$row_ref};
+        print $fh " mapped_data [".Dumper(\%mapped_data)."]\n";
+=skip        
+        my @row = map { 
+          if ( defined ( $import->value($config,$_) ) ){
+            $import->value($config,$_);
           }
-          elsif ( defined ( $config->lookup_value('field'=>$_) ) ){  
-            $config->lookup_value( 'field'=>$_, 'value'=>$row_ref->{$_} );
+          elsif ( defined ( $import->lookup_value($config,$_,$row_ref->{ ucfirst( $import->mapping($config,$_)//'ignore' ) }))){
+             if ($import->lookup_value($config,$_,$row_ref->{ ucfirst( $import->mapping($config,$_)//'ignore' ) }) ne 'undef'){
+              $import->lookup_value($config,$_,$row_ref->{ ucfirst( $import->mapping($config,$_)//'ignore' ) });
+             }
+             else{
+               "row[value mapping not defined!]\n";
+             }
           }
           else{
-            $row_ref->{$_}//''; 
+            $row_ref->{ ucfirst( $import->mapping($config,$_)//'ignore' ) }//'';
           }
-        } @ordered_hyfields );
+        } @$ordered_hydstra_fields;
+        print $fh "row [".Dumper(\@row)."]\n";
+        
+        $hysth->execute(@row);
+=cut        
+      }
+      
+      
+      #$sth->bind_columns(map {\$rec{$_}} @$ordered_hydstra_fields);
+      
+      #my $rows_ref = $sth->fetchall_arrayref({});
+      
+=skip    
+      foreach $row_ref ( @$rows_ref ) {
+        
+        #my @write_row = ( map { 
+          #if ( defined ( $import->value($config,$_) ) ){
+          #if ( defined ( $import->value('field'=>$_) ) ){
+          #  $config->value('field'=>$_);
+          #  print $fh "   Value defined for [$_]\n";
+          #}
+          #elsif ( defined ( $config->lookup_value('field'=>$_) ) ){  
+          #  $config->lookup_value( 'field'=>$_, 'value'=>$row_ref->{$_} );
+          #}
+          #else{
+            #$row_ref->{$_}//''; 
+            #print $fh "   Value for [$_]\n  row_ref [".Dumper($row_ref)."] value [$row_ref->{$_}]";
+            print $fh "   row_ref [".Dumper($row_ref)."]\n";
+          #}
+        #} @ordered_hyfields );
+        
+    my %rec =();
+
+    $sth->bind_columns(map {\$rec{$_}} @fields);
+
+    print "$rec{emp_id}\t",
+          "$rec{first_name}\t",
+          "$rec{monthly_payment}\n"
+        while $sth->fetchrow_arrayref;
         
         #my @write_row = ( map { $row_ref->{$_}//'' } @ordered_hyfields );
-        
+        my @write_row = ( map { $_ } @ordered_hyfields );
+        print $fh "Write row [".Dumper(\@write_row)."]";
         
         #$hysth->execute(@write_row);  
         #write this row to the sqlite hydb.db
@@ -196,6 +272,20 @@ use constant HY_DB => 'hydb.db';
       push (@row, $_) if ( defined $data{$hydstra_table}{$_} ) for @ordered_hyfields;
       then slurp into hydb.db. while $sth->fetchrow_arrayref;
     }
+    
+    
+    
+    my @fields = (qw(emp_id first_name monthly_payment));
+
+    $sth->execute;
+    my %rec =();
+
+    $sth->bind_columns(map {\$rec{$_}} @fields);
+
+    print "$rec{emp_id}\t",
+          "$rec{first_name}\t",
+          "$rec{monthly_payment}\n"
+        while $sth->fetchrow_arrayref;
     
     
       

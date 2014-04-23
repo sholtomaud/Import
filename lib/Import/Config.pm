@@ -115,6 +115,68 @@ Code snippet.
     return \@tables;
  }
  
+=head2 mapping()
+  
+ Takes a Hydstra field, and returns the foriegn field (assumes 
+ 
+=cut 
+
+ sub mapping{
+    my $self = shift;
+    my $config = shift;
+    my $field = shift;
+    #my $field = $params->{hydstra_field};
+    #my $config = $params->{config};
+    
+    my (@mappings,%fields,%mapping);
+    $fields{$_->{foreign_field}} = \@{$_->{hydstra_mappings}} for @{$config->{elements}};
+    
+    foreach my $foreign_field ( keys %fields ){
+      foreach (@{$fields{$foreign_field}}){
+        $mapping{$_->{field}} = $foreign_field;
+      }
+    }
+    
+    my $mapped_field = $mapping{$field};
+    return $mapped_field;
+ } 
+ 
+=head2 table_field_mapping()
+  
+ Takes a foreign field, and Hydstra  table and returns the hydstra field
+ E.g. table_field_mapping($config,lc($foreign_field),lc($hydstra_table) )
+ 
+=cut 
+
+ sub table_field_mapping{
+    my $self = shift;
+    my $config = shift;
+    my $foreign_field = shift;
+    my $hydstra_table = shift;
+    
+    $foreign_field =~ s{\s}{_}ig;
+    
+    my (@mappings,%fields);
+    my %mapping =();
+    $fields{ $_->{foreign_field} } = \@{$_->{hydstra_mappings}} for @{$config->{elements}};
+            
+    foreach my $ff ( keys %fields ){
+      foreach (@{$fields{$ff}}){
+        #$mapping{}{hydstra_table} = hydstra_field;
+        $mapping{lc( $ff ) }{lc( $_->{table} ) }{ lc($_->{field}) }++;
+      }
+    }
+    
+    if ( defined $mapping{lc( $foreign_field) }{lc ( $hydstra_table ) } ){
+      my $mapped_fields;
+      %{$mapped_fields} = %{$mapping{$foreign_field}{$hydstra_table}};
+      return $mapped_fields;
+    }
+    else{
+      return;
+    }
+ }  
+ 
 =head2 value()
   
  Return a field value which has been set in the config file
@@ -124,11 +186,12 @@ Code snippet.
  sub value{
     my $self = shift;
     my $config = shift;
-    my $params = shift;
-    my $field = $params->{field};
+    my $field = shift;
+    #my $field = $params->{field};
     
     my (@mappings,%fields_with_value_defined);
     push ( @mappings, $_->{hydstra_mappings} ) for @{$config->{elements}};
+    
     foreach my $mapping( @mappings ){
       foreach (@{$mapping}){
         if ( defined $_->{value} ){
@@ -142,7 +205,7 @@ Code snippet.
       return $value;
     }
     else{
-      return 0;
+      return;
     }
     
  } 
@@ -156,20 +219,37 @@ Code snippet.
  sub lookup_value{
     my $self = shift;
     my $config = shift;
-    my $params = shift;
-    my $field = $params->{field};
-    my $lookup_value = $params->{lookup_value};
+    my $field = shift;
+    my $lookup_value = shift;
     
-    my (@mappings,@tables,%tables);
+    #my $params = shift;
+    #my $field = $params->{field};
+    #my $lookup_value = $params->{lookup_value};
+    
+    my (@mappings,@tables,%value_mappings);
     
     push ( @mappings, $_->{hydstra_mappings} ) for @{$config->{elements}};
-    foreach my $mapping( @mappings ){
-      $tables{$_->{table}}++ for @{$mapping};   
-    }
-    push (@tables, $_) for (keys %tables);
     
-    #return $value;
-    return 0;
+    foreach my $mapping( @mappings ){
+      foreach (@{$mapping}){
+        if ( defined $_->{value_mappings} ){
+          $value_mappings{ lc($_->{field}) } = $_->{value_mappings};   
+        }
+        else {
+          return;
+        }
+      }
+    }
+    
+    my $value = $value_mappings{lc($field)}{lc($lookup_value)}//'undef';
+    
+    #foreach my $mapping( @mappings ){
+    #  $tables{$_->{table}}++ for @{$mapping};   
+    #}
+    #push (@tables, $_) for (keys %tables);
+    
+    return $value;
+    
  }
  
  
