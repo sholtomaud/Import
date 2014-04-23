@@ -142,7 +142,6 @@ use constant HY_DB => 'hydb.db';
       print $fh "Hydstra Table [$hydstra_table]\n";
       #print $fh "Ordered fields [\n".Dumper($ordered_hydstra_fields)."]\n";
       $hydbh->do($create);
-      my $hysth = $hydbh->prepare($prepare);
       
       #my @ordered_hyfields = $config->ordered_hytable_fields($hydstra_table);
       #$config->value('field'=>$_)
@@ -154,6 +153,7 @@ use constant HY_DB => 'hydb.db';
       #}
       
       foreach $row_ref ( @$rows_ref ) {
+        my $hysth = $hydbh->prepare($prepare);
         
         print $fh " row_ref [".Dumper($row_ref)."]\n";
         my %mapped_data = ();
@@ -177,6 +177,7 @@ use constant HY_DB => 'hydb.db';
         
         #%{$mapped_data{$hydstra_table}} = map { $import->table_field_mapping($config,$_,$hydstra_table)  } keys %{$row_ref};
         print $fh " mapped_data [".Dumper(\%mapped_data)."]\n";
+        my @row = map { $mapped_data{$_}//'' } @$ordered_hydstra_fields;
 =skip        
         my @row = map { 
           if ( defined ( $import->value($config,$_) ) ){
@@ -194,10 +195,10 @@ use constant HY_DB => 'hydb.db';
             $row_ref->{ ucfirst( $import->mapping($config,$_)//'ignore' ) }//'';
           }
         } @$ordered_hydstra_fields;
+=cut        
         print $fh "row [".Dumper(\@row)."]\n";
         
         $hysth->execute(@row);
-=cut        
       }
       
       
