@@ -222,10 +222,6 @@ Code snippet.
     my $field = shift;
     my $lookup_value = shift;
     
-    #my $params = shift;
-    #my $field = $params->{field};
-    #my $lookup_value = $params->{lookup_value};
-    
     my (@mappings,@tables,%value_mappings);
     
     push ( @mappings, $_->{hydstra_mappings} ) for @{$config->{elements}};
@@ -233,23 +229,20 @@ Code snippet.
     foreach my $mapping( @mappings ){
       foreach (@{$mapping}){
         if ( defined $_->{value_mappings} ){
-          $value_mappings{ lc($_->{field}) } = $_->{value_mappings};   
+          $value_mappings{ lc($_->{field}) } = $_->{value_mappings} ;   
         }
-        else {
-          return;
-        }
+        #else {
+        #  my $return = 'not defined $_->{value_mappings}';
+        #  return $mapping;
+        #}
       }
     }
-    
-    my $value = $value_mappings{lc($field)}{lc($lookup_value)}//'undef';
-    
-    #foreach my $mapping( @mappings ){
-    #  $tables{$_->{table}}++ for @{$mapping};   
-    #}
-    #push (@tables, $_) for (keys %tables);
-    
+    #my $value = $value_mappings{lc($field)}{lc($lookup_value)}
+    my $value = (defined $value_mappings{lc($field)} )? $value_mappings{lc($field)}{lc($lookup_value)}//"lookup does not exist but shouldd!!!!!": return;
+#    my $value = $lookups->;
+    #//'';
+    #return;
     return $value;
-    
  }
  
  

@@ -94,8 +94,11 @@ use constant HY_DB => 'hydb.db';
   #print $fh "tabl_info [".Dumper(\@tth)."] end of dumper";
   
   my %data = ();
-   my $rns_aquifer = 1;
-  foreach my $foreign_table ( keys %tables ){
+  my $rns_aquifer = 1;
+  %tables = () ;
+  %tables = ( 'foriegn_stratigraphy' => 1) ;
+   
+  foreach my $foreign_table ( sort keys %tables ){
     print $fh "Preparing config for foreign_table [$foreign_table]\n";
     my $db_config_name = substr($foreign_table,8);
     my $import = Import::Config->new(
@@ -126,7 +129,7 @@ use constant HY_DB => 'hydb.db';
     #we know the table arlready 
     my $hydstra_tables = $import->hydstra_tables($config);
     
-    #print $fh "hydstra tables for foreign_table [$foreign_table] [".Dumper($hydstra_tables)."]\n";  
+    print $fh "hydstra tables for foreign_table [$foreign_table] [".Dumper($hydstra_tables)."]\n";  
     
     next if ( $db_config_name =~ m{^(Var|Elev|Spec|Water|Mult).*}i );
     
@@ -159,25 +162,52 @@ use constant HY_DB => 'hydb.db';
         my %mapped_data = ();
         foreach $foreign_key ( keys %{$row_ref}){
             if ( $row_ref->{$foreign_key} gt ''){
+              
+              #######
+              #all of this should be in the Normalise.pm
+              #########
               my $mapped_fields = $import->table_field_mapping($config,lc($foreign_key),lc($hydstra_table) )//next; #"[$foreign_key] undef";
               foreach $mapped_field ( keys %{$mapped_fields} ){
+                my $table_field = lc($hydstra_table).'_'.lc($mapped_field);
+                #my $return = $import->lookup_value($config,$mapped_field, lc($row_ref->{$foreign_key})  ) // ();
+                
+                #print $fh "lookup filed [$mapped_field] value [".lc($row_ref->{$foreign_key})."] return [".Dumper($return)."]";
+                
+                #print $fh " type_contraint [".Dumper($table->is_date($table_field))."]\n";
+                  
+                
                 if ( defined ( $import->value($config,$mapped_field) ) ){
-                  $mapped_data{lc($mapped_field)} = $import->value($config,$mapped_field);
+                  $mapped_data{$table_field} = $import->value($config,$mapped_field);
                 }
-                #elsif(){}
+                elsif( defined ( $table->is_date($table_field) ) && $row_ref->{$foreign_key} gt '' ){
+                  print $fh " field [$table_field] is_date \n";
+                  my $normalise = Import::Normalise->new('date'=>$row_ref->{$foreign_key});
+                  $mapped_data{$table_field} = $normalise->normalise_date;
+                }
+                elsif(defined ( $import->lookup_value($config,$mapped_field, lc($row_ref->{$foreign_key})  ) )){
+                  $mapped_data{$table_field} = $import->lookup_value($config,$mapped_field, lc($row_ref->{$foreign_key})  );
+                }
                 else{
-                  $mapped_data{lc($mapped_field)} = $row_ref->{$foreign_key}//'what the?';
+                  $mapped_data{$table_field} = $row_ref->{$foreign_key}//'what the?';
                 }
-              }  
+              }
+              #########
+              #all of this should be in the Normalise.pm
+              #########
+              
             }
             else{
               next;
             }
         }
         
+        
+        print $fh " mapped_data [".Dumper(\%mapped_data)."] - Now validating\n";
+        my $table_validation = 'Hydstra::'.$module.'::Validation';
+        my $valid_table = $table_validation->new(%mapped_data);
         #%{$mapped_data{$hydstra_table}} = map { $import->table_field_mapping($config,$_,$hydstra_table)  } keys %{$row_ref};
-        print $fh " mapped_data [".Dumper(\%mapped_data)."]\n";
-        my @row = map { $mapped_data{$_}//'' } @$ordered_hydstra_fields;
+        print $fh " valid_table [".Dumper($valid_table)."]\n";
+        my @row = map { $valid_table->{lc($hydstra_table).'_'.$_}//'' } @$ordered_hydstra_fields;
 =skip        
         my @row = map { 
           if ( defined ( $import->value($config,$_) ) ){
