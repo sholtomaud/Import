@@ -21,10 +21,6 @@
 		},
 		{
 			"field": "station",
-			"table": "pumptest"
-		},
-		{
-			"field": "station",
 			"table": "aresite"
 		}]
 	},
@@ -101,10 +97,6 @@
 		{
 			"table": "gwhole",
 			"field": "enddate"
-		},
-		{
-			"field": "testdate",
-			"table": "pumptest"
 		}],
 		"foreign_key_field": 0
 	},
@@ -134,10 +126,6 @@
 		"foreign_table": "registration",
 		"foreign_sqlite_type": "text",
 		"foreign_field": "method_const",
-		"hydstra_mappings": [{
-			"table": "gwhole",
-			"field": "constmeth"
-		}],
 		"foreign_key_field": 0
 	},
 	{
@@ -195,18 +183,9 @@
 	{
 		"foreign_table": "registration",
 		"foreign_sqlite_type": "real",
-		"foreign_field": "lat",
-		"hydstra_mappings": [{
-			"table": "site",
-			"field": "latitude"
-		}],
 		"foreign_key_field": 0
 	},
 	{
-		"hydstra_mappings": [{
-			"table": "site",
-			"field": "longitude"
-		}],
 		"foreign_key_field": 0,
 		"foreign_table": "registration",
 		"foreign_sqlite_type": "real",
@@ -318,10 +297,6 @@
 	},
 	{
 		"foreign_key_field": 0,
-		"hydstra_mappings": [{
-			"table": "pumptest",
-			"field": "equipment"
-		}],
 		"foreign_field": "equipment",
 		"foreign_sqlite_type": "text",
 		"foreign_table": "registration"

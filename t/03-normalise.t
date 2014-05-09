@@ -6,9 +6,11 @@ use lib "$Bin/lib";
 use Time::Local;
 use Import;
 use Import::Config;
+use Import::Normalise;
 use DBI;
 use Data::Dumper;
 use Hydstra;
+use Try::Tiny;
 
 use constant DB_DIR => 'C:/temp/gwdb'; 
 use constant SQL_DIR => $Bin.'/tmp/'; 
@@ -96,7 +98,8 @@ use constant HY_DB => 'hydb.db';
   my %data = ();
   my $rns_aquifer = 1;
   %tables = () ;
-  %tables = ( 'foriegn_stratigraphy' => 1) ;
+  #%tables = ( 'foriegn_stratigraphy' => 1) ;
+  %tables = ( 'foriegn_stratigraphy' => 1, 'foriegn_aquifer'=>1, 'foriegn_registration'=>1) ;
    
   foreach my $foreign_table ( sort keys %tables ){
     print $fh "Preparing config for foreign_table [$foreign_table]\n";
@@ -110,7 +113,7 @@ use constant HY_DB => 'hydb.db';
     #print $fh "config [".Dumper($config)."]\n";  
     
     #print $fh "Preparing for foreign_table [$foreign_table]\n";
-    my $query = qq{select * from $foreign_table limit 10};
+    my $query = qq{select * from $foreign_table limit 1000};
     my $sth = $dbh->prepare($query);
     $sth->execute();
     
@@ -158,7 +161,7 @@ use constant HY_DB => 'hydb.db';
       foreach $row_ref ( @$rows_ref ) {
         my $hysth = $hydbh->prepare($prepare);
         
-        print $fh " row_ref [".Dumper($row_ref)."]\n";
+        #print $fh " row_ref [".Dumper($row_ref)."]\n";
         my %mapped_data = ();
         foreach $foreign_key ( keys %{$row_ref}){
             if ( $row_ref->{$foreign_key} gt ''){
@@ -172,23 +175,42 @@ use constant HY_DB => 'hydb.db';
                 #my $return = $import->lookup_value($config,$mapped_field, lc($row_ref->{$foreign_key})  ) // ();
                 
                 #print $fh "lookup filed [$mapped_field] value [".lc($row_ref->{$foreign_key})."] return [".Dumper($return)."]";
+                print $fh "lookup table [$module] field [$mapped_field] value [".lc($row_ref->{$foreign_key})."]\n";
                 
                 #print $fh " type_contraint [".Dumper($table->is_date($table_field))."]\n";
-                  
+                #my $normalise = Import::Normalise->new('date'=>$row_ref->{$foreign_key});
+                
+                #my $normalise = Import::Normalise->new('date'=>'01/12/61');
+                #my $nd = $normalise->normalise_date;  #normalise_date
+                #print $fh " field [$table_field] normalised date [$nd]\n";
                 
                 if ( defined ( $import->value($config,$mapped_field) ) ){
                   $mapped_data{$table_field} = $import->value($config,$mapped_field);
+                  print $fh " value defined [".$import->value($config,$mapped_field)."]\n";
                 }
-                elsif( defined ( $table->is_date($table_field) ) && $row_ref->{$foreign_key} gt '' ){
-                  print $fh " field [$table_field] is_date \n";
+                elsif( lc($module) eq 'site' && defined ( $table->is_latitude( $table_field ) ) ){
+                  my $normalise = Import::Normalise->new('latitude'=>$row_ref->{$foreign_key});
+                  $mapped_data{$table_field} = $normalise->normalise_latitude;
+                  print $fh " is_latitude [".$normalise->normalise_latitude."]\n";
+                }
+                elsif( lc($module) eq 'site' &&  defined ( $table->is_longitude( $table_field ) ) ){
+                  my $normalise = Import::Normalise->new('longitude'=>$row_ref->{$foreign_key});
+                  $mapped_data{$table_field} = $normalise->normalise_longitude;
+                  print $fh " is_longitude [".$normalise->normalise_longitude."]\n";
+             
+                }
+                elsif( defined ( $table->is_date($table_field) ) ){
                   my $normalise = Import::Normalise->new('date'=>$row_ref->{$foreign_key});
                   $mapped_data{$table_field} = $normalise->normalise_date;
+                  print $fh " is_date field [".$normalise->normalise_date."]\n";
                 }
                 elsif(defined ( $import->lookup_value($config,$mapped_field, lc($row_ref->{$foreign_key})  ) )){
                   $mapped_data{$table_field} = $import->lookup_value($config,$mapped_field, lc($row_ref->{$foreign_key})  );
+                  print $fh " is_lookup field [".$import->lookup_value($config,$mapped_field, lc($row_ref->{$foreign_key})  )."]\n";
                 }
                 else{
                   $mapped_data{$table_field} = $row_ref->{$foreign_key}//'what the?';
+                  print $fh " is_normal [".$row_ref->{$foreign_key}//'what the?'."]\n";
                 }
               }
               #########
@@ -204,9 +226,21 @@ use constant HY_DB => 'hydb.db';
         
         print $fh " mapped_data [".Dumper(\%mapped_data)."] - Now validating\n";
         my $table_validation = 'Hydstra::'.$module.'::Validation';
-        my $valid_table = $table_validation->new(%mapped_data);
+        my $valid_table;
+      
+        #next if (! $table_validation->new(%mapped_data));
+      
+        try {
+          $valid_table = $table_validation->new(%mapped_data);
+        }
+        catch{
+          print $fh "  failed to validate $module\n";
+          next;
+        };
+        
+        
         #%{$mapped_data{$hydstra_table}} = map { $import->table_field_mapping($config,$_,$hydstra_table)  } keys %{$row_ref};
-        print $fh " valid_table [".Dumper($valid_table)."]\n";
+       #print $fh " valid_table [".Dumper($valid_table)."]\n";
         my @row = map { $valid_table->{lc($hydstra_table).'_'.$_}//'' } @$ordered_hydstra_fields;
 =skip        
         my @row = map { 
@@ -226,9 +260,12 @@ use constant HY_DB => 'hydb.db';
           }
         } @$ordered_hydstra_fields;
 =cut        
-        print $fh "row [".Dumper(\@row)."]\n";
         
-        $hysth->execute(@row);
+        my $return = $hysth->execute(@row);
+        
+        #print $fh "row [".Dumper(\@row)."]\n";
+        print $fh "  execute return[$return]\n" if $return == 0;
+        
       }
       
       

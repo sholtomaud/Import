@@ -158,7 +158,13 @@ Code snippet.
     
     my (@mappings,%fields);
     my %mapping =();
-    $fields{ $_->{foreign_field} } = \@{$_->{hydstra_mappings}} for @{$config->{elements}};
+    
+    for ( @{$config->{elements}} ){
+      next if ( !defined  $_->{hydstra_mappings} );
+      $fields{ $_->{foreign_field} } = \@{$_->{hydstra_mappings}};
+    }
+    
+    #$fields{ $_->{foreign_field} } = \@{$_->{hydstra_mappings}} for @{$config->{elements}};
             
     foreach my $ff ( keys %fields ){
       foreach (@{$fields{$ff}}){
@@ -238,7 +244,7 @@ Code snippet.
       }
     }
     #my $value = $value_mappings{lc($field)}{lc($lookup_value)}
-    my $value = (defined $value_mappings{lc($field)} )? $value_mappings{lc($field)}{lc($lookup_value)}//"lookup does not exist but shouldd!!!!!": return;
+    my $value = (defined $value_mappings{lc($field)} )? $value_mappings{lc($field)}{lc($lookup_value)}//"lookup [$lookup_value] does not exist but should!!!!": return;
 #    my $value = $lookups->;
     #//'';
     #return;
