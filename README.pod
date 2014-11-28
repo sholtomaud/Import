@@ -1,30 +1,25 @@
+=head1 Import::Config
+8
+Import configuration files 
+
 =head1 VERSION
 
 Version 0.01
 
 =head1 SYNOPSIS
 
-Import data from QLD DNRM Ground Water db .txt files to Hydstra.
-This importer caches data in a provisional, dated SQLite database for further processing
-The import also performs some provisional cleansing of the data by removing unclosed quote ("), (') characters that exist in the DNRM GWDB files
+Use this module to import configuration files
 
 Code snippet.
 
-  use Import;
+  use Import::Config;
   
-  my $import = Import->new( 
+  my $config = Import::Config->new( 
    
   );
 
-  $import->log;
+  
      
-=head1 EXPORTS
-
-  * tables()
-  * FileList()
-
-=head1 SUBROUTINES/METHODS
-
 =head2 SUCCESS
   
   Constant used for logging the success status of the module at any step
@@ -33,30 +28,16 @@ Code snippet.
   
   Constant used for logging the fail status of the module at any step
 
-=head2 tables()
+=head1 EXPORTS
+
+  * config()
   
-Return hashref of all the Hydstra tables in the configuration files
+=head1 SUBROUTINES/METHODS
 
-=skip      
-      
-      my %foreign_fields;
-      
-      print "Fields [".$_->{foreign_field}."]\n" for @{$config->{elements}};
-=cut      
-    }
-    push (@hytables,$_) for keys \%hytables;
-    #return \%tables; #\%foreign_fields;
-    return \@hytables; #\%foreign_fields;
-}
-
-=head2 FileList()
-
-Return an array of files
+=head2 config()
   
-=head2 CheckHeaders()
+ Return the config for a particular table
 
-Check the Headers of foreign db.txt files are as expected
-  
 =head1 AUTHOR
 
 Sholto Maud, C<< <sholto.maud at gmail.com> >>
@@ -68,9 +49,7 @@ Please report any bugs in the issues wiki.
 
 =head1 SUPPORT
 
-You can find documentation for this module with the perldoc command.
-
-    perldoc Import
+You can find documentation for this module on the Git repo
 
 =over 4
 
