@@ -1,18 +1,19 @@
 
-package Import::fs;
+package Import::History;
+
 use Moose;
+use DBI;
 use JSON;
+use DateTime;
 use Env;
 use FindBin qw($Bin);
-use File::Basename;
+use File::Copy;
+#use Logger;
+#use Import::Config;
 use Try::Tiny;
-use Data::Dumper;
-use File::Find;
-#extends 'Import';
 
-=head1 Import::fs
+use HyDB;
 
-Tests data
 
 =head1 VERSION
 
@@ -22,28 +23,17 @@ Version 0.01
 
 our $VERSION = '0.01';
 
-
 =head1 SYNOPSIS
 
-Use this module to access common file system operations
-
-Code snippet.
-
-  use Import::fs;
-  
-  my $fs = Import::fs->new( 
-   
-  );
+Generic import of data to History table
      
 =cut
+  
+=head1 EXPORTS
 
+  * import()
 
- my $default_dir = $Bin.'/config/';
- 
- has 'config_dir' => ( is => 'ro', isa => 'Str', required => 1, default => $default_dir); 
- has 'import_dir' => ( is => 'rw', isa => 'Str'); 
- 
-
+=head1 SUBROUTINES/METHODS
 
 =head2 SUCCESS
   
@@ -60,50 +50,90 @@ Code snippet.
 =cut
 
  use constant FAIL    => 0;
- 
- has 'date' => ( is => 'ro', isa => 'DateTime'); 
- 
-=head1 EXPORTS
 
-  * FileList()
+
+=head2 update()
   
-=head1 SUBROUTINES/METHODS
+Import hashref to the HISTORY table
 
+=cut 
 
-=head2 FileList()
-
-Return an array of files
+ sub update{
+    my $self = shift;
+    #my %mappings = %{$_[0]->{variable_mappings}};
+    my %history   = %{$_[0]->{history}};
+    my %params     = %{$_[0]->{params}};
+    
+    my $workarea  = '[priv.histupd]';
+    
+    my $rep = 'C:\\temp\\historyreport.txt';
+    open my $io, '>', $rep;
+    
+    my $hydb = HyDB->new( 'history', $workarea, { allowdupes => 0, printdest => '-R', errordest => $io } );
+    
+    foreach my $site( keys %history) { 
+      $hydb->sethash( \%{ $history{$site} } );
+      $hydb->write();
+      $hydb->clear();
+    }
+    $hydb->close();
+    
+    close ($rep);
+    return 1;
   
-=cut
-
-
-sub FList{
-  my @files = ();
-  my $self = shift;
-  my $d = $_[0];
-  my $pattern = $_[1];
-  find( sub { push @files, $File::Find::name if ( m/^(.*)$pattern$/i ) }, $d) ;
-  return @files;
 }
 
-
-
-=head2 TableName()
-
-Returns the Table Name from a file name
+=head2 base64()
   
-=cut
+Import base64 to the HISTORY table
 
+=cut 
 
-sub TableName{
-  my $self = shift;
-  my $file = $_[0];
+ sub base64{
+    my $self = shift;
+    #my %mappings = %{$_[0]->{variable_mappings}};
+    my %history   = %{$_[0]->{history}};
+    my %params     = %{$_[0]->{params}};
+    my $workarea  = $_[0]->{workarea};
+    
+#my $workarea  = '[priv.histupd]';
+    
+    my $rep = 'C:\\temp\\historyreport.txt';
+    open my $io, '>', $rep;
+    
+    my $hydb = HyDB->new( 'history', '['.$workarea.']', { allowdupes => 0, printdest => '-R', errordest => $io } );
+      
+    foreach my $site( keys %history) { 
+      $hydb->sethash( \%{ $history{$site} } );
+      $hydb->write();
+      $hydb->clear();
+    }
+    $hydb->close();
+    
+    close ($rep);
+    return 1;
   
-  my ($table,$path,$suffix) = fileparse($file);
-  ($table,$suffix) = split(/\./,$table);
-  return $table;
 }
 
+    
+=head1 AUTHOR
+
+Sholto Maud, C<< <sholto.maud at gmail.com> >>
+
+=head1 BUGS
+
+Please report any bugs in the issues wiki.
+
+
+=head1 SUPPORT
+
+You can find documentation for this module with the perldoc command.
+
+    perldoc Import
+
+=over 4
+
+=back
 
 
 =head1 ACKNOWLEDGEMENTS
@@ -152,4 +182,4 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 =cut
 
-1; # End of Tests
+1; # End of History

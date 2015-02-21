@@ -7,7 +7,7 @@ use DateTime;
 use Env;
 use FindBin qw($Bin);
 use File::Copy;
-use Logger;
+#use Logger;
 #use Import::Config;
 use Try::Tiny;
 
@@ -95,6 +95,7 @@ Return hashref of all the Hydstra tables in the configuration files
     
     print "config_dir  [$config_dir]\n";
     my @files = <$config_dir/*.json>;
+=skip      
     
     my %tables;
     my %hytables;
@@ -133,16 +134,15 @@ Return hashref of all the Hydstra tables in the configuration files
       
       
       
-=skip      
       
       my %foreign_fields;
       
       print "Fields [".$_->{foreign_field}."]\n" for @{$config->{elements}};
-=cut      
     }
     push (@hytables,$_) for keys \%hytables;
     #return \%tables; #\%foreign_fields;
     return \@hytables; #\%foreign_fields;
+=cut      
 }
 
 =head2 FileList()
