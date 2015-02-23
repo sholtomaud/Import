@@ -66,6 +66,7 @@ Get the tables from INI file.
   
 =cut
 
+
 sub get_tables_hash {
   my $self = shift;
   #my $merge_tables = $self->merge_tables;
@@ -76,7 +77,7 @@ sub get_tables_hash {
   foreach my $table ( keys %merge_tables ){
     my $config =  $merge_tables{$table};
     my $decoded;
-
+    
     if ( $config == 1 || $config eq 'default' ){
       $tables{$table}++;
     }
@@ -87,12 +88,27 @@ sub get_tables_hash {
       }
       catch {
           warn "Caught JSON::XS decode error: $_";
+          print "trouble with decoding INI file for [$table]";
       };
 
-      if ( defined ( $decoded->{subordinates} ) ){
-        my @subs = @{$decoded->{subordinates}};
-        foreach my $sub (@subs){
-          $tables{$sub}++;
+    
+      foreach my $key ( @{$tables{$table}->{keys} } ){
+        
+        next if !defined $key->{subordinates};
+
+        foreach my $sub ( @{ $key->{subordinates} } ){
+
+          my %keyfield = ();
+          my $subtable = $sub->{table};               
+          $keyfield{field} = $sub->{field}//$key->{field};    #Default to parent table field if not explicitly stated
+          $keyfield{action} = $key->{action};
+          $keyfield{value} = $key->{value};
+          (defined  $key->{combined_var} )? $keyfield{combined_var} = $key->{combined_var} : print "no combined var \n" ;
+          
+          my @keys = ( defined $tables{$subtable}{keys} )? @{$tables{$subtable}{keys}} : ();
+          push(@keys,\%keyfield);
+          $tables{$subtable}{keys} = \@keys;
+        
         }
       }
     }  
