@@ -78,11 +78,16 @@ Merge two systems
   
 =cut
 
+
+
 sub merge_hydbutil_export_formatted_csv {
   my $self = shift;
   my $base_db = $self->base_db_file;
   my @source_files = @{$_[0]->{source_files}};
   my %mappings = %{$_[0]->{variable_mappings}};
+  my %tables = %{$_[0]->{tables}};
+
+  
   #my @source_files = $_[1];
   
   print "source_files \n".Dumper(@source_files);
@@ -102,14 +107,27 @@ sub merge_hydbutil_export_formatted_csv {
   open my $rep, ">>", $commit_file;
   open my $exec_rep, ">>", $exec_rep_file;
   print $rep Dumper($_).'\n';
+  
   foreach ( @source_files ){
     my $table = $fs->TableName($_);
     my $module = ucfirst(lc($table));
     my $hytable = "Hydstra::$module";
     
+    my %transform_config = %{$tables{lc($table)}};
+
     print "module [$module]\n";
     my $hyt = $hytable->new();
-    my $varsetup = $hytable->variable;
+    
+    my $varsetup;
+    
+    eval{
+      $varsetup = $hytable->variable;
+    };
+    if ($@) {
+      warn $@; # print the error
+      print "No variable setup for [$module] [".Dumper($@)."]\n";
+    }
+
     my $create = $hytable->create;
     my $prepare = $hytable->prepare;
     #$prepare =~ s{IGNORE}{ABORT}ig;
@@ -140,7 +158,25 @@ sub merge_hydbutil_export_formatted_csv {
       }
 
       if ( $varsetup->{variables} ){
-        
+        foreach my $table_variable_field ( keys %{$varsetup} ){
+          if ( $table_variable_field->{combined} ){
+            my $varcol = $table_variable_field->{column};
+            my ($var,$subvar) = split('\.',$row_array[$varcol]);
+            if ( defined $mappings{$var} ){
+              $row_array[$varcol] = $mappings{$var}.'.'.$subvar;
+            }
+            
+          }
+          else{
+            my $varcol = $table_variable_field->{column};
+            my $var = $row_array[$varcol];
+            if ( defined $mappings{$var} ){
+              $row_array[$varcol] = $mappings{$var};
+            }
+          }
+        }
+
+=skip
         if ( $varsetup->{combined_variable} ){
           my $varcol = $varsetup->{variable_column};
           my ($var,$subvar) = split('\.',$row_array[$varcol]);
@@ -174,8 +210,8 @@ sub merge_hydbutil_export_formatted_csv {
             $row_array[$varcol] = $mappings{$var};
           }
         }
+=cut        
       }
-#=cut        
       
       eval{
         $sth->execute(@row_array); # or die $sth->errstr;
@@ -190,7 +226,6 @@ sub merge_hydbutil_export_formatted_csv {
       eval{
         $hydbh->commit;
       };
-    
       if ($@) {
         #warn $@; # print the error
         print $rep "Commit Error: File [$@]\n";
@@ -249,17 +284,29 @@ Combine the variable tables with the base table
 =cut 
 
 sub combine_variable_tables{
-  #  print 
   my $self = shift;
-  #my $base_db = $self->base_db_file;
-  my %source_files = %{$_[0]};
+  my %source_files = %{$_[0]->{source_files}};
+  my %tables = %{$_[0]->{tables}};
   my %system_var_mapping =();
+  my %return_hash = ();
   #print "source files\n[";
   #print Dumper($_[0]);
   #print "] source files\n";
   #print $source_files{base};
   #print "Done \n";
-  
+  my %return;
+
+  if ( !defined $tables{variable} ){
+    my $msg = "Variable table not defined in INI file.";
+    my $script_action = "Script stopped.";
+    my $user_action = "Please make sure the variable table is defined in your INI file.";
+    $return_hash{error}{msg} = $msg;
+    $return_hash{error}{script_action} = $script_action;
+    $return_hash{error}{user_action} = $user_action;
+    #errorLog(\%return_hash);
+    return \%return_hash;
+  }
+
   foreach ( keys %source_files){
     print " source [$_] file $source_files{$_}\n";
   }
@@ -285,6 +332,7 @@ sub combine_variable_tables{
   open my $io, "<:encoding(utf8)", $base_system_file;
   my $count = 0;
   
+  
   while (my $row = $csv->getline ($io)) {
     my @row_array = @{$row};
     my $variable = $row_array[0];
@@ -298,7 +346,7 @@ sub combine_variable_tables{
     $variables{$variable} = $row;
     #print "row [".Dumper(\%row)."]\n";
   }
-  print "variables \n";
+  
   #print Dumper(\%variables);
   print "variables \n";
   
@@ -309,6 +357,8 @@ sub combine_variable_tables{
   #1. Add any non-existing variables to the variable hash
   #2. Now go and check whether the existing variable numbers have the same variable name - if not report to file.
   
+  #variable  =   { "keys": [{ "field":"varnum", "action":"increment", "value":1, "combined_var":"prefix","subordinates":[{"table":"wqvar","field":"variable"},{"table":"varsub","field":"variable"},{"table":"varcon"},{"table":"results"},{"table":"hydmeas","field":"variable"},{"table":"gwtrace","field":"variable"}] }] }
+
   
   foreach my $system ( keys %source_files ){
     next if $system eq 'base';
@@ -360,7 +410,7 @@ sub combine_variable_tables{
   #print $vof "Variables ".Dumper(\%variables);
   close ($vof);
   
-  my %return_hash = ();
+  
   
   $return_hash{data} = \%variables;
   $return_hash{mappings} = \%system_var_mapping;
