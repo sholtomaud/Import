@@ -14,6 +14,7 @@ use Data::Dumper;
 use Time::Local;
 use Hydstra;
 use Import::fs;
+use Import::ToSQLite;
 
 =head1 VERSION
 
@@ -90,7 +91,7 @@ sub merge_hydbutil_export_formatted_csv {
   
   #my @source_files = $_[1];
   
-  print "source_files \n".Dumper(@source_files);
+  #print "source_files \n".Dumper(@source_files);
   
   my $hydbh = DBI->connect(          
       "dbi:SQLite:dbname=$base_db", 
@@ -102,20 +103,23 @@ sub merge_hydbutil_export_formatted_csv {
   my $fs = Import::fs->new();
   my $exec_rep_file = "C:\\temp\\exec_report.txt";
   my $commit_file = "C:\\temp\\report.txt";
+  
   unlink ($commit_file);
   unlink ($exec_rep_file);
-  open my $rep, ">>", $commit_file;
-  open my $exec_rep, ">>", $exec_rep_file;
-  print $rep Dumper($_).'\n';
+  #open my $rep, ">>", $commit_file;
+  #open my $exec_rep, ">>", $exec_rep_file;
+  #print $rep Dumper($_).'\n';
   
   foreach ( @source_files ){
     my $table = $fs->TableName($_);
     my $module = ucfirst(lc($table));
     my $hytable = "Hydstra::$module";
     
-    my %transform_config = %{$tables{lc($table)}};
+    #my %transform_config = %{$tables{lc($table)}};
 
-    print "module [$module]\n";
+    
+    print "importing [$_]\n";
+
     my $hyt = $hytable->new();
     
     my $varsetup;
@@ -147,7 +151,7 @@ sub merge_hydbutil_export_formatted_csv {
     while (my $row = $csv->getline ($io)) {
       $count++;
       my @row_array = @{$row}; 
-      
+      print "importing row [$count]\r";
       #my $cleansed_row = check_scientific_notation($row);
       
       #check for scientific notation
@@ -158,9 +162,12 @@ sub merge_hydbutil_export_formatted_csv {
       }
 
       if ( $varsetup->{variables} ){
-        foreach my $table_variable_field ( keys %{$varsetup} ){
-          if ( $table_variable_field->{combined} ){
-            my $varcol = $table_variable_field->{column};
+        my %variable_setup = %{$varsetup};
+        foreach my $table_variable_field ( keys %variable_setup ){
+          next if ( $table_variable_field eq 'variables' );
+          if ( defined $variable_setup{$table_variable_field}{combined} ){
+            #print "combined var [$table] [$table_variable_field]";
+            my $varcol = $variable_setup{$table_variable_field}{column};
             my ($var,$subvar) = split('\.',$row_array[$varcol]);
             if ( defined $mappings{$var} ){
               $row_array[$varcol] = $mappings{$var}.'.'.$subvar;
@@ -168,7 +175,7 @@ sub merge_hydbutil_export_formatted_csv {
             
           }
           else{
-            my $varcol = $table_variable_field->{column};
+            my $varcol = $variable_setup{$table_variable_field}{column};
             my $var = $row_array[$varcol];
             if ( defined $mappings{$var} ){
               $row_array[$varcol] = $mappings{$var};
@@ -218,7 +225,7 @@ sub merge_hydbutil_export_formatted_csv {
       };
       if ($@) {
         warn $@; # print the error
-        print $exec_rep "Execute Error: File [$_], Row [$count], Row Values [".Dumper(@{$row})."]\ndollar@ [".Dumper($@)."]\n";
+        print "Execute Error: File [$_], Row [$count], Row Values [".Dumper(@{$row})."]\ndollar@ [".Dumper($@)."]\n";
       }
       
     } 
@@ -228,10 +235,12 @@ sub merge_hydbutil_export_formatted_csv {
       };
       if ($@) {
         #warn $@; # print the error
-        print $rep "Commit Error: File [$@]\n";
+        print "Commit Error: File [$@]\n";
    
         #table check (each table has a different rule associated with it)
         #need to test the value and precision is appropriate
+
+
         
 =skip        
         my @keys = $hytable->keys;
@@ -266,13 +275,9 @@ sub merge_hydbutil_export_formatted_csv {
         #}
      
       }
-      print "Importing table [$table] row [$count]    \r";
-    
-    
-    
-
+      
     close($io);
-    close($rep);
+    #close($rep);
   }
   return 1;
 }
@@ -286,6 +291,7 @@ Combine the variable tables with the base table
 sub combine_variable_tables{
   my $self = shift;
   my %source_files = %{$_[0]->{source_files}};
+  my $var_mappings_file = $_[0]->{mappings_json};
   my %tables = %{$_[0]->{tables}};
   my %system_var_mapping =();
   my %return_hash = ();
@@ -295,6 +301,11 @@ sub combine_variable_tables{
   #print $source_files{base};
   #print "Done \n";
   my %return;
+
+#####
+  #import_hash
+  #my $imp = Import::ToSQLite->new({'temp' =>$temp,'db_file' =>$junk_db});
+  
 
   if ( !defined $tables{variable} ){
     my $msg = "Variable table not defined in INI file.";
@@ -307,9 +318,9 @@ sub combine_variable_tables{
     return \%return_hash;
   }
 
-  foreach ( keys %source_files){
-    print " source [$_] file $source_files{$_}\n";
-  }
+  #foreach ( keys %source_files){
+  #  print " source [$_] file $source_files{$_}\n";
+  #}
   
   my $hytable = "Hydstra::Variable";
   my @keys = $hytable->keys;
@@ -357,9 +368,6 @@ sub combine_variable_tables{
   #1. Add any non-existing variables to the variable hash
   #2. Now go and check whether the existing variable numbers have the same variable name - if not report to file.
   
-  #variable  =   { "keys": [{ "field":"varnum", "action":"increment", "value":1, "combined_var":"prefix","subordinates":[{"table":"wqvar","field":"variable"},{"table":"varsub","field":"variable"},{"table":"varcon"},{"table":"results"},{"table":"hydmeas","field":"variable"},{"table":"gwtrace","field":"variable"}] }] }
-
-  
   foreach my $system ( keys %source_files ){
     next if $system eq 'base';
     
@@ -370,7 +378,8 @@ sub combine_variable_tables{
     open my $io, "<:encoding(utf8)", $source_files{$system};
     my $count = 0;
   
-        print $sof "\nVARIABLE CHECK\n"; 
+    print $sof "VARIABLE CHECK\n"; 
+    
     while ( my $row = $csv->getline ($io) ) {
       my @row_array = @{$row};
       my $variable = $row_array[0];
@@ -383,6 +392,55 @@ sub combine_variable_tables{
         
         my $clash = 0;
             
+        #variable  =   { "keys": [{ "field":"varnum", "action":"increment", "value":1, "combined_var":"prefix","subordinates":[{"table":"wqvar","field":"variable"},{"table":"varsub","field":"variable"},{"table":"varcon"},{"table":"results"},{"table":"hydmeas","field":"variable"},{"table":"gwtrace","field":"variable"}] }] }
+        generic_config_handler({'table'=>\%{$tables{variable}},'row_array'=>\@row_array})
+        
+
+sub generic_config_handler {
+  my $table = $_[0]->{table};
+  my $row_array = @{$_[0]->{row_array}};
+
+  foreach my $key ( @{$tables{variable}{keys}}){
+    So this row_array number will be got from the hydstra definition.
+    $table{variable}{keys} {field}
+    
+    my $col_to_check = Hydstra::$table  ;
+    my $field   = $key->{field};
+    my $action  = $key->{action};
+    my $value   = $key->{value};
+
+    switch $action{
+
+    }
+    case (increment) {
+
+    }
+    case (decrement) {
+
+    }
+    case (prepend) {
+
+    }
+    case (append) {
+
+    }
+
+
+    if ( $variables{$row_array[0]}[$colum_to_check] ne $row_array[$colum_to_check] ){
+            #print $sof "variable clash [ $row_array[0] ]\nBASE [$variables{$row_array[0]}[$colum_to_check]] $system [$row_array[$colum_to_check]] \n"; 
+            $clash++;
+          }
+
+    foreach my $subordinate_table ( @{$key->{subordinates}} ){
+
+    }
+
+  }
+
+
+}
+        
+
         foreach my $colum_to_check ( @col_check ){
           if ( $variables{$row_array[0]}[$colum_to_check] ne $row_array[$colum_to_check] ){
             #print $sof "variable clash [ $row_array[0] ]\nBASE [$variables{$row_array[0]}[$colum_to_check]] $system [$row_array[$colum_to_check]] \n"; 
@@ -403,20 +461,17 @@ sub combine_variable_tables{
     }
   }
   
-  
-  my $var_file = 'C:\\temp\\variable_file.txt';
-  unlink ($var_file);
-  open my $vof, ">:encoding(utf8)", $var_file;
-  #print $vof "Variables ".Dumper(\%variables);
-  close ($vof);
-  
-  
-  
   $return_hash{data} = \%variables;
   $return_hash{mappings} = \%system_var_mapping;
+  
   #print "return hash\n";
   #print Dumper(%return_hash);
   #print "end return hash";
+  
+  my $json = encode_json \%return_hash;
+  unlink ($var_mappings_file);
+  open my $json_var, ">", $var_mappings_file;
+  print $json_var $json;
   
   #return \%system_var_mapping;  
   return \%return_hash;  

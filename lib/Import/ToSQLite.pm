@@ -148,7 +148,7 @@ sub import_csv{
   #print "varnum_column [$varnum_column]\n";
   
   my $hyt = $hytable->new();
-  print "hyt [$hyt]\n";
+  
   my $create = $hytable->create;
   my $prepare = $hytable->prepare;
 
