@@ -4,6 +4,7 @@ use Moose;
 use JSON;
 use DBI;
 use Env;
+use Switch;
 use FindBin qw($Bin);
 use File::Basename;
 use Text::CSV_XS;
@@ -115,12 +116,17 @@ sub merge_hydbutil_export_formatted_csv {
     my $module = ucfirst(lc($table));
     my $hytable = "Hydstra::$module";
     
-    #my %transform_config = %{$tables{lc($table)}};
-
+    my @dirarray = split(/\\|\//,$_);
+    print Dumper (@dirarray);
+    my $sysno = $#dirarray - 1;
+    my $system = $dirarray[$sysno];
+    
+    next if $system eq 'base';
     
     print "importing [$_]\n";
 
     my $hyt = $hytable->new();
+    #my @ordered_fields = $hytable->ordered_fields;
     
     my $varsetup;
     
@@ -134,7 +140,7 @@ sub merge_hydbutil_export_formatted_csv {
 
     my $create = $hytable->create;
     my $prepare = $hytable->prepare;
-    #$prepare =~ s{IGNORE}{ABORT}ig;
+    $prepare =~ s{IGNORE}{ABORT}ig;
     my $sth = $hydbh->prepare($prepare);
         
     my $csv = Text::CSV_XS->new ({ 
@@ -161,7 +167,7 @@ sub merge_hydbutil_export_formatted_csv {
         }
       }
 
-      if ( $varsetup->{variables} ){
+      if ( defined ( $varsetup->{variables} ) {
         my %variable_setup = %{$varsetup};
         foreach my $table_variable_field ( keys %variable_setup ){
           next if ( $table_variable_field eq 'variables' );
@@ -220,11 +226,23 @@ sub merge_hydbutil_export_formatted_csv {
 =cut        
       }
       
+
+      ################
+      #sub IMPORTER {}
+      ################
       eval{
         $sth->execute(@row_array); # or die $sth->errstr;
       };
       if ($@) {
         warn $@; # print the error
+        #my %tbl = %{$tables{lc($table)}};
+        #incrementor({'row'=>\@row_array, 'table'=>\%tbl });
+        if ( !defined ( $varsetup->{variables} ) {
+
+
+        }
+        else{ print "double trouble. It's a variable table, AND a DUPLICATE"};
+       
         print "Execute Error: File [$_], Row [$count], Row Values [".Dumper(@{$row})."]\ndollar@ [".Dumper($@)."]\n";
       }
       
@@ -301,6 +319,7 @@ sub combine_variable_tables{
   #print $source_files{base};
   #print "Done \n";
   my %return;
+  #my @keyfields = @{ $tables{variable}{keys} };
 
 #####
   #import_hash
@@ -343,6 +362,8 @@ sub combine_variable_tables{
   open my $io, "<:encoding(utf8)", $base_system_file;
   my $count = 0;
   
+  my $hyt = $hytable->new();
+  #my @ordered_fields = $hytable->ordered_fields;
   
   while (my $row = $csv->getline ($io)) {
     my @row_array = @{$row};
@@ -392,11 +413,73 @@ sub combine_variable_tables{
         
         my $clash = 0;
             
-        #variable  =   { "keys": [{ "field":"varnum", "action":"increment", "value":1, "combined_var":"prefix","subordinates":[{"table":"wqvar","field":"variable"},{"table":"varsub","field":"variable"},{"table":"varcon"},{"table":"results"},{"table":"hydmeas","field":"variable"},{"table":"gwtrace","field":"variable"}] }] }
-        generic_config_handler({'table'=>\%{$tables{variable}},'row_array'=>\@row_array})
-        
+        #clasher({'table'=>\%{$tables{variable}},'row_array'=>\@row_array})
 
-sub generic_config_handler {
+        foreach my $colum_to_check ( @col_check ){
+          if ( $variables{$row_array[0]}[$colum_to_check] ne $row_array[$colum_to_check] ){
+            #print $sof "variable clash [ $row_array[0] ]\nBASE [$variables{$row_array[0]}[$colum_to_check]] $system [$row_array[$colum_to_check]] \n"; 
+            $clash++;
+          }
+        } 
+        
+        #get next free variable
+        if ( $clash > 0 ){
+          my $counter = 0;
+          my $free_variable = free_variable_search(\%variables);
+          #print $sof "found a class for [$variable] free variable [$free_variable]\n"; 
+          $row_array[0] = $free_variable;
+          
+=skip          
+          foreach my $key (@keyfields ){
+                         
+            my $field   = $key->{field};
+            my @subordinates = @{$key->{subordinates}};
+            print "subordinates", Dumper (\@subordinates);
+            foreach my $subordinate_table ( @subordinates){
+            }
+          }
+=cut          
+          $system_var_mapping{$system}{$variable} = $free_variable;
+          
+          $variables{$free_variable} = \@row_array;
+
+        }
+      }
+    }
+  }
+  
+  $return_hash{data} = \%variables;
+  $return_hash{mappings} = \%system_var_mapping;
+  
+  #print "return hash\n";
+  #print Dumper(%return_hash);
+  #print "end return hash";
+  
+  my $json = encode_json \%return_hash;
+  unlink ($var_mappings_file);
+  open my $json_var, ">", $var_mappings_file;
+  print $json_var $json;
+  
+  #return \%system_var_mapping;  
+  return \%return_hash;  
+}
+
+  
+sub clash_check{
+
+  #String sql = "SELECT * FROM "+table+" WERE key=? AND value=?";
+  #Cursor cur = db.rawQuery(sql, new String[] { key, value });
+
+}
+
+=head2 incrementor()
+
+Generic incrementor for non VARIABLE fields, uses INI config to find out whether to increment/decrement or prepend/append
+
+=cut 
+
+sub incrementor {
+=skip
   my $table = $_[0]->{table};
   my $row_array = @{$_[0]->{row_array}};
 
@@ -436,47 +519,8 @@ sub generic_config_handler {
     }
 
   }
-
-
+=cut  
 }
-        
-
-        foreach my $colum_to_check ( @col_check ){
-          if ( $variables{$row_array[0]}[$colum_to_check] ne $row_array[$colum_to_check] ){
-            #print $sof "variable clash [ $row_array[0] ]\nBASE [$variables{$row_array[0]}[$colum_to_check]] $system [$row_array[$colum_to_check]] \n"; 
-            $clash++;
-          }
-        } 
-        
-        #get next free variable
-        if ( $clash > 0 ){
-          my $counter = 0;
-          my $free_variable = free_variable_search(\%variables);
-          #print $sof "found a class for [$variable] free variable [$free_variable]\n"; 
-          $row_array[0] = $free_variable;
-          $system_var_mapping{$system}{$variable} = $free_variable;
-          $variables{$free_variable} = \@row_array;
-        }
-      }
-    }
-  }
-  
-  $return_hash{data} = \%variables;
-  $return_hash{mappings} = \%system_var_mapping;
-  
-  #print "return hash\n";
-  #print Dumper(%return_hash);
-  #print "end return hash";
-  
-  my $json = encode_json \%return_hash;
-  unlink ($var_mappings_file);
-  open my $json_var, ">", $var_mappings_file;
-  print $json_var $json;
-  
-  #return \%system_var_mapping;  
-  return \%return_hash;  
-}
-
  
 =head2 free_variable_search()
 
@@ -499,7 +543,145 @@ sub free_variable_search{
   return $varno;
 }
 
+
   
+=head2 clasher()
+
+Keep a log of all the previous lookups.
+
+=cut 
+
+=skip
+sub clasher {
+  my $table = $_[0]->{table};
+  my $row_array = @{$_[0]->{row_array}};
+  
+  my $hyt = $hytable->new();
+  my @ordered_fields = $hytable->ordered_fields;
+  
+  foreach my $key ( @{$table{keys}}){
+   
+    my $field   = $key->{field};
+    my $action  = $key->{action};
+    my $value   = $key->{value};
+    my @subordinates = $key->{subordinates};
+    my $col_to_check;
+
+    foreach my $colno ( 0 .. $#ordered_fields ){
+      if ( $ordered_fields[$colno]  eq $key->{field} ){
+        $col_to_check = $colno;
+        last;
+      }
+      else{
+         next ;
+      }  
+    }
+
+    if ( $variables{$row_array[0]}[$colum_to_check] ne $row_array[$colum_to_check] ){
+            #print $sof "variable clash [ $row_array[0] ]\nBASE [$variables{$row_array[0]}[$colum_to_check]] $system [$row_array[$colum_to_check]] \n"; 
+    }
+
+    switch ($action) {
+      case "increment" {
+
+        for (my $i=$fieldval ; $i <= 9999 ; $i = $i + $value) {
+
+          my $fieldval = $fieldval + $value;
+          if ( ! defined ( $vars{$vacant_var_counter } ) ){
+            $varno = $vacant_var_counter;
+            
+            last;
+          }
+          else{
+            $varno = 0;
+          }
+        }
+
+      }
+      case "decrement" {
+        for (my $i=$fieldval ; $i >= 1 ; $i = $i - $value) {
+          my $newfieldval = $fieldval + $value;
+          
+          foreach my $subordinate_table ( @{} ){
+
+          }
+          if ( ! defined ( $vars{$vacant_var_counter } ) ){
+            $varno = $vacant_var_counter;
+            last;
+          }
+          else{
+            $varno = 0;
+          }
+          
+
+          %subordinate_tables{mapings}{$fieldval} = $newfieldval;
+        }
+
+      }
+      case "prepend" {
+        my $newfieldval = $fieldval.$value;
+
+      }
+      case "append" {
+        my $newfieldval = $value.$fieldval;
+      }
+    }
+
+    apply_to_subordinates({'subordinates'=>\@subordinates, 'mapings'=> });
+
+#variable  =   { "keys": [{ "field":"varnum", "action":"increment", "value":1, "combined_var":"prefix","subordinates":[{"table":"wqvar","field":"variable"},{"table":"varsub","field":"variable"},{"table":"varcon"},{"table":"results"},{"table":"hydmeas","field":"variable"},{"table":"gwtrace","field":"variable"}] }] }
+        
+
+    if ( $variables{$row_array[0]}[$colum_to_check] ne $row_array[$colum_to_check] ){
+            #print $sof "variable clash [ $row_array[0] ]\nBASE [$variables{$row_array[0]}[$colum_to_check]] $system [$row_array[$colum_to_check]] \n"; 
+            $clash++;
+          }
+
+    foreach my $subordinate_table ( @{$key->{subordinates}} ){
+
+    }
+foreach my $colum_to_check ( @col_check ){
+          if ( $variables{$row_array[0]}[$colum_to_check] ne $row_array[$colum_to_check] ){
+            #print $sof "variable clash [ $row_array[0] ]\nBASE [$variables{$row_array[0]}[$colum_to_check]] $system [$row_array[$colum_to_check]] \n"; 
+            $clash++;
+          }
+        } 
+        
+        #get next free variable
+        if ( $clash > 0 ){
+          my $counter = 0;
+          my $free_variable = free_variable_search(\%variables);
+          #print $sof "found a class for [$variable] free variable [$free_variable]\n"; 
+          $row_array[0] = $free_variable;
+          $system_var_mapping{$system}{$variable} = $free_variable;
+          $variables{$free_variable} = \@row_array;
+        }
+  }
+
+
+}
+=cut
+
+
+
+  
+=head2 apply_to_subordinates()
+
+apply to subordinate tables
+
+=cut 
+
+sub apply_to_subordinates{
+  #    @subordinates
+
+       #my $table = $_[0]->{table};
+  #my $row_array = @{$_[0]->{row_array}};
+  
+  #my $hyt = $hytable->new();
+  #my @ordered_fields = $hytable->ordered_fields;
+} 
+
+
 =head2 create_a_new_record()
 
 Keep a log of all the previous lookups.
